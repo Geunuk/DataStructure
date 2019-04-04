@@ -3,35 +3,86 @@ class BPlusTree():
         self.branch_factor = branch_factor
         self.root = None
     def print(self):
-        self.root.print(1)
+        self.root.print(0)
+    
+    def insert(self, x, data):
+        if self.root == None:
+            self.root = LeafNode(self, self.branch_factor)
+        
+        leaf = self.root.leaf_search(x)
+        leaf.insert(x, data)
+    
     def search(self, x):
         return self.root.search(x)
 
     def ranged_search(self, x, y):
         return self.root.ranged_search(x, y)
 
-    """
-    def insert(self, pair):
-        if self.root == None:
-            self.root = Leaf(self.order)
-        self.root.insert(pair)
-    """
 class Node():
-    def __init__(self, branch_factor, is_root=False):
+    def __init__(self, tree, branch_factor):
+        self.tree = tree
         self.branch_factor = branch_factor
-        self.is_root = is_root
+        self.parent = None
         
         self.keys = []
-        self.children = []
+        self.children = [None]
 
 class InternalNode(Node):
     def print(self, depth):
-        print(depth, self.keys)
+        print("Depth:", depth, "Keys:", self.keys)
         for c in self.children:
             c.print(depth+1)
 
+    def insert(self, x, child):
+        for i, k in enumerate(self.keys):
+            if x == k:
+                print("Error: insert(x) x already exists")
+                return
+            elif x < k:
+                self.keys.insert(i, x)
+                self.children.insert(i, child)
+        else:
+            self.keys.append(x)
+            self.children.append(child)
+        
+        # split test
+        if len(self.children) > self.branch_factor:
+            new_node = InternalNode(self.tree, self.branch_factor)
+            new_node.parent = self.parent
+            new_node.keys = self.keys[self.branch_factor//2 + 1:]
+            del self.keys[self.branch_factor//2 + 1:]
+            up_key = self.keys.pop()
+
+            new_node.children = self.children[self.branch_factor//2+1:]
+            del self.children[self.branch_factor//2+1:]
+            self.children.append(new_node)
+
+            if self.parent == None:
+                print("make new")
+                p = InternalNode(self.tree, self.branch_factor)
+                p.keys = [up_key]
+                p.children = [self, new_node]
+
+                self.parent = p
+                self.tree.root = p
+                new_node.parent = p
+        
+            else:
+                self.parent.insert(up_key, new_leaf)
+
+        
+    def leaf_search(self, x):
+        for i, k in enumerate(self.keys):
+            if x < k:
+                result_index = i
+                break
+        result_index = -1
+        if isinstance(self.children[0], LeafNode):
+            return self.children[result_index]
+        else:
+            return self.children[result_index].search(x)
+    
     def search(self, x):
-        print(self.name)
         for i, k in enumerate(self.keys):
             if x < k:
                 return self.children[i].search(x)
@@ -47,7 +98,46 @@ class InternalNode(Node):
 
 class LeafNode(Node):
     def print(self, depth):
-        print(depth, self.keys)
+        print("Depth:", depth, "Keys:", self.keys, "Children:", self.children)
+
+    def insert(self, x, data):
+        for i, k in enumerate(self.keys):
+            if x == k:
+                print("Error: insert(x) x already exists")
+                return
+            elif x < k:
+                self.keys.insert(i, x)
+                self.children.insert(i, data)
+        else:
+            self.keys.append(x)
+            self.children.insert(-1, data)
+
+        # split test
+        if len(self.children) > self.branch_factor:
+            new_leaf = LeafNode(self.tree, self.branch_factor)
+            new_leaf.parent = self.parent
+            new_leaf.keys = self.keys[self.branch_factor//2:]
+            del self.keys[self.branch_factor//2:]
+
+            new_leaf.children = self.children[self.branch_factor//2:]
+            del self.children[self.branch_factor//2:]
+            self.children.append(new_leaf)
+
+            if self.parent == None:
+                print("make new")
+                p = InternalNode(self.tree, self.branch_factor)
+                p.keys = [new_leaf.keys[0]]
+                p.children = [self, new_leaf]
+
+                self.parent = p
+                self.tree.root = p
+                new_leaf.parent = p
+        
+            else:
+                self.parent.insert(new_leaf.keys[0], new_leaf)
+
+    def leaf_search(self, x):
+        return self
 
     def search(self, x):
         print(self.name)
@@ -55,7 +145,7 @@ class LeafNode(Node):
             if x == k:
                 return self.children[i]
         return None
-
+    
     def ranged_search(self, x, y):
         result = []
 
@@ -86,17 +176,6 @@ class LeafNode(Node):
 
         return result
 
-
-    """
-    def insert(self, pair):
-        if not self.bucket:  # Empty Bucket
-            self.bucket.append(pair)
-        else:
-            for i, (key, _) in enumerate(self.bucket):
-                if key < pair[0]:
-                    self.bucket.insert(i-1, pair)
-                    break
-    """
 class Record():
     def __init__(self, data):
         self.data = data
@@ -107,7 +186,7 @@ class Record():
 def example1():
     t = BPlusTree(4)
 
-    seven = InternalNode(4, True)
+    seven = InternalNode(4)
     threefive = InternalNode(4)
     nine = InternalNode(4)
 
@@ -201,5 +280,8 @@ def ranged_search_test():
         print()
 
 if __name__ == "__main__":
-    t = example1()
-    t.print()
+    t = BPlusTree(4)
+    for i in range(1, 10+1):
+        t.insert(i, i)
+        t.print()
+
