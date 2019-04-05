@@ -1,11 +1,16 @@
+import math
+import random
+
 class BPlusTree():
     def __init__(self, branch_factor):
         self.branch_factor = branch_factor
         self.root = None
     def print(self):
         self.root.print(0)
-    
+    def test(self):
+        self.root.test()
     def insert(self, x, data):
+        print("Insert:", x)
         if self.root == None:
             self.root = LeafNode(self, self.branch_factor)
         
@@ -13,6 +18,7 @@ class BPlusTree():
         leaf.insert(x, data)
     
     def search(self, x):
+        print("Search: ", X)
         return self.root.search(x)
 
     def ranged_search(self, x, y):
@@ -32,6 +38,29 @@ class InternalNode(Node):
         print("Depth:", depth, "Keys:", self.keys)
         for c in self.children:
             c.print(depth+1)
+    
+    def test(self):
+        m = len(self.children)
+        assert(len(self.keys) == m-1)
+        assert(m <= self.branch_factor)
+        if self.parent == None:
+            assert(2 <= m)
+        else:
+            assert(math.ceil(self.branch_factor/2) <= m)
+
+        for k in  self.children[0].keys:
+            assert(k < self.keys[0])
+       
+        for i in range(len(self.keys)-1):
+            k1, k2 = self.keys[i], self.keys[i+1]
+            for x in self.children[i+1].keys:
+                assert(k1 <= x and x < k2)
+        
+        for k in self.children[-1].keys:
+            assert(self.keys[-1] <= k)
+       
+        for c in self.children:
+            c.test()
 
     def insert(self, x, child):
         for i, k in enumerate(self.keys):
@@ -40,7 +69,18 @@ class InternalNode(Node):
                 return
             elif x < k:
                 self.keys.insert(i, x)
-                self.children.insert(i, child)
+                if child.keys[0] >= x:
+                    self.children.insert(i+1, child)
+                else:
+                    self.children.insert(i, chlid)
+                break
+                """
+                if i == 0:
+                    self.children.insert(1, child)
+                else:
+                    self.children.insert(i, child)
+                break
+                """
         else:
             self.keys.append(x)
             self.children.append(child)
@@ -55,10 +95,10 @@ class InternalNode(Node):
 
             new_node.children = self.children[self.branch_factor//2+1:]
             del self.children[self.branch_factor//2+1:]
-            self.children.append(new_node)
+            for c in new_node.children:
+                c.parent = new_node
 
             if self.parent == None:
-                print("make new")
                 p = InternalNode(self.tree, self.branch_factor)
                 p.keys = [up_key]
                 p.children = [self, new_node]
@@ -68,7 +108,7 @@ class InternalNode(Node):
                 new_node.parent = p
         
             else:
-                self.parent.insert(up_key, new_leaf)
+                self.parent.insert(up_key, new_node)
 
         
     def leaf_search(self, x):
@@ -76,12 +116,15 @@ class InternalNode(Node):
             if x < k:
                 result_index = i
                 break
-        result_index = -1
+        else:
+            result_index = -1
+        return self.children[result_index].leaf_search(x)
+        """
         if isinstance(self.children[0], LeafNode):
             return self.children[result_index]
         else:
-            return self.children[result_index].search(x)
-    
+            return self.children[result_index].leaf_search(x)
+        """
     def search(self, x):
         for i, k in enumerate(self.keys):
             if x < k:
@@ -89,7 +132,6 @@ class InternalNode(Node):
         return self.children[-1].search(x)
     
     def ranged_search(self, x, y):
-        print(self.name)
         for i, k in enumerate(self.keys):
             if x < k:
                 return self.children[i].ranged_search(x, y)
@@ -100,6 +142,20 @@ class LeafNode(Node):
     def print(self, depth):
         print("Depth:", depth, "Keys:", self.keys, "Children:", self.children)
 
+    def test(self):
+
+        m = len(self.children)
+        assert(len(self.keys) == m-1)
+        assert(m <= self.branch_factor)
+        if self.parent == None:
+            assert(1 <= m)
+        else:
+            assert(math.ceil(self.branch_factor/2) <= m)
+        
+        for i in range(len(self.keys)-1):
+            k1, k2 = self.keys[i], self.keys[i+1]
+            assert(k1 < k2)
+        
     def insert(self, x, data):
         for i, k in enumerate(self.keys):
             if x == k:
@@ -108,6 +164,7 @@ class LeafNode(Node):
             elif x < k:
                 self.keys.insert(i, x)
                 self.children.insert(i, data)
+                break
         else:
             self.keys.append(x)
             self.children.insert(-1, data)
@@ -124,7 +181,6 @@ class LeafNode(Node):
             self.children.append(new_leaf)
 
             if self.parent == None:
-                print("make new")
                 p = InternalNode(self.tree, self.branch_factor)
                 p.keys = [new_leaf.keys[0]]
                 p.children = [self, new_leaf]
@@ -140,7 +196,6 @@ class LeafNode(Node):
         return self
 
     def search(self, x):
-        print(self.name)
         for i, k in enumerate(self.keys):
             if x == k:
                 return self.children[i]
@@ -153,7 +208,6 @@ class LeafNode(Node):
         start_found, end_found = False, False
         node = self
         while node != None and not end_found:
-            print(node.name)
             for i, k in enumerate(node.keys):
                 if start_found:
                     start_index = 0
@@ -168,8 +222,6 @@ class LeafNode(Node):
                     end_index = i-1
 
             if end_index != -1:
-                if node.name == "nineten":
-                    print(start_index, end_index)
                 result += node.children[start_index: end_index+1]
                 node = node.children[-1]
 
@@ -267,7 +319,6 @@ def example1():
 def search_test():
     t = example1()
     for i in range(1, 11):
-        print("search: ", i)
         print(t.search(i))
         print()
 
@@ -279,9 +330,35 @@ def ranged_search_test():
             print(x, end=', ')
         print()
 
+def insert_test_random(branch_factor, key_num):
+    t = BPlusTree(branch_factor)
+
+    key_list = list(range(1, key_num+1))
+    random.shuffle(key_list)
+    for k in key_list:
+        t.insert(k, Record(k))
+    t.print()
+    t.test()
+
+def insert_test_reverse(branch_factor, key_num):
+    t = BPlusTree(branch_factor)
+    
+    key_list = list(range(1, key_num+1))
+    key_list.reverse()
+
+    for k in key_list:
+        t.insert(k, Record(k))
+        t.print()
+        t.test()
+
+def insert_test(branch_factor, key_num):
+    t = BPlusTree(branch_factor)
+
+    for k in range(1, key_num+1):
+        t.insert(k, Record(k))
+        t.print()
+        t.test()
+
 if __name__ == "__main__":
     t = BPlusTree(4)
-    for i in range(1, 10+1):
-        t.insert(i, i)
-        t.print()
-
+    #insert_test_reverse(4, 4)
