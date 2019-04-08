@@ -38,6 +38,16 @@ class Node():
         
         self.keys = []
         self.children = [None]
+    
+    def replace_key(self, deleted_key, new_key):
+        node = self.parent
+        while node != None:
+            for i, key in enumerate(node.keys):
+                if deleted_key == key:
+                    node.keys[i] = new_key
+                    return
+            else:
+                node = node.parent
 
 class InternalNode(Node):
     def print(self, depth):
@@ -69,7 +79,122 @@ class InternalNode(Node):
             c.test()
     
 
-    def delete(self, x):
+    def delete(self, x, child_index):
+        for i, k in enumerate(self.keys):
+            if x == k:
+                deleted_index = i
+                break
+        else:
+            print("Error: delete(x) x does not exist")
+            return
+        print("Internal delete", x , deleted_index)
+        is_first_deleted = True if deleted_index == 0 else False
+        if self.parent != None:
+            for i, k in enumerate(self.parent.keys):
+                if self.keys[0] == k:
+                    idx_at_parent_children = i+1
+                    break
+            else:
+                idx_at_parent_children = 0
+        
+        # delete at node itself
+        deleted_key = self.keys.pop(deleted_index)
+        #del self.children[deleted_index]
+        del self.children[child_index]
+
+        is_root = self.parent == None
+        if self.parent == None:
+            min_children_num = 2
+        else:
+            min_children_num = math.ceil(self.branch_factor/2)
+
+        # merge or borrow(redistribute)
+        if is_root and len(self.children) < min_children_num:
+            self.children[0].parent = None
+            self.tree.root = self.children[0]
+            if not isinstance(self.children[0], InternalNode):
+                self.children[0].keys[0] = deleted_key
+
+        elif not is_root and len(self.children) < min_children_num:
+            if idx_at_parent_children == 0:
+                is_leftmost = True
+            else:
+                is_leftmost = False
+                left_sibling = self.parent.children[idx_at_parent_children-1]
+                left_sibling_num = len(left_sibling.children)
+                if left_sibling_num >= min_children_num + 1:
+                    left_enough = True
+                else:
+                    left_enough = False
+ 
+            if idx_at_parent_children == len(self.parent.children)-1:
+                is_rightmost = True
+            else:
+                is_rightmost = False
+                right_sibling = self.parent.children[idx_at_parent_children+1]
+                right_sibling_num = len(right_sibling.children)
+                if right_sibling_num >= min_children_num + 1:
+                    right_enough = True
+                else:
+                    right_enough = False
+                
+
+            # borrow from left
+            if not is_leftmost and left_enough:
+                borrow_key = left_sibling.keys.pop()
+                borrow_children = left_sibling.children.pop()
+
+                self.keys.insert(0, borrow_key)
+                self.children.insert(0, borrow_children)
+            
+                #self.replace_key(deleted_key, borrow_key)
+            # borrow from rigt
+            elif not is_rightmost and right_enough:
+                borrow_key = right_sibling.keys.pop(0)
+                borrow_children = right_sibling.children.pop(0)
+
+                self.keys.append(borrow_key)
+                self.children.append(borrow_children)
+                #right_sibling.replace_key(borrow_key, right_sibling.keys[0])
+                #if borrow_key == self.keys[0]:
+                #    self.replace_key(deleted_key, borrow_key)
+
+            # merge with left
+            elif not is_leftmost:
+                print("leaf merge with left")
+                left_sibling.keys.extend(self.keys)
+                left_sibling.children.extend(self.children)
+
+                idx_at_parent_key = idx_at_parent_children - 1
+                parent_deleted_key = self.parent.keys[idx_at_parent_key]
+                #self.parent.delete(parent_deleted_key)
+                self.parent.delete(parent_deleted_key, idx_at_parent_children)
+                # ?delete at internal
+                #idx_at_parent_key = idx_at_parent_children - 1
+                #self.parent.keys.pop(idx_at_parent_key)
+                #self.parent.children.pop(idx_at_parent_children)
+
+            # merge with right when leftmost
+            else:
+                print("leaf merge with right")
+                right_sibling.keys[:0] = self.keys
+                right_sibling.children[:0] = self.children[:-1]
+                
+                idx_at_parent_key = idx_at_parent_children - 1
+                parent_deleted_key = self.parent.keys[idx_at_parent_key]
+                self.parent.delete(parent_deleted_key, idx_at_parent_children)
+                #self.parent.delete(parent_deleted_key)
+                # no need to replace_key because it's popped
+                #self.parent.keys.pop(0)
+                # self.parent.children.pop(0)
+                
+        elif is_first_deleted:
+            #replace
+            new_key = self.keys[deleted_index]
+            self.replace_key(deleted_key, new_key)
+        else:
+            pass
+
         ...
         ## roo1은 merge 때
         
@@ -151,7 +276,7 @@ class InternalNode(Node):
 
 class LeafNode(Node):
     def print(self, depth):
-        print("Depth:", depth, "Keys:", self.keys, "Children:", self.children)
+        print("Depth:", depth, hex(id(self)),"Keys:", self.keys, "Children:", self.children)
 
     def test(self):
         m = len(self.children)
@@ -176,15 +301,20 @@ class LeafNode(Node):
             return
     
         is_first_deleted = True if deleted_index == 0 else False
-        for i, k in enumerate(self.parent.keys):
-            if self.keys[0] == k:
-                idx_at_parent_children = i+1
-                break
-        else:
-            idx_at_parent_children = 0
-
+        if self.parent != None:
+            for i, k in enumerate(self.parent.keys):
+                if self.keys[0] == k:
+                    idx_at_parent_children = i+1
+                    break
+            else:
+                idx_at_parent_children = 0
+        
+        # delete at node itself
         deleted_key = self.keys.pop(deleted_index)
         del self.children[deleted_index]
+
+        if self.parent == None:
+            return
 
         min_children_num = math.ceil(self.branch_factor/2)
         # merge or borrow(redistribute)
@@ -220,8 +350,8 @@ class LeafNode(Node):
                 self.keys.insert(0, borrow_key)
                 self.children.insert(0, borrow_children)
             
-                left_sibling.replace_key
                 self.replace_key(deleted_key, borrow_key)
+            # borrow from rigt
             elif not is_rightmost and right_enough:
                 borrow_key = right_sibling.keys.pop(0)
                 borrow_children = right_sibling.children.pop(0)
@@ -232,10 +362,54 @@ class LeafNode(Node):
                 if borrow_key == self.keys[0]:
                     self.replace_key(deleted_key, borrow_key)
 
+            # merge with left
             elif not is_leftmost:
-                ...
+                print("leaf merge with left")
+                left_sibling.keys.extend(self.keys)
+                left_sibling.children[-1:] = self.children
+
+                
+                # ?delete at internal ?only left merge
+                idx_at_parent_key = idx_at_parent_children-1
+                parent_deleted_key = self.parent.keys[idx_at_parent_key]
+                #self.parent.delete(parent_deleted_key)
+                self.parent.delete(parent_deleted_key, idx_at_parent_children)
+
+                #self.parent.keys.pop(idx_at_parent_key)
+                #self.parent.children.pop(idx_at_parent_children)
+
+            # merge with right when leftmost
             else:
-                ...
+                print("leaf merge with right")
+                right_sibling.keys[:0] = self.keys
+                right_sibling.children[:0] = self.children[:-1]
+             
+                # concat leaf
+                grand_parent = self.parent.parent
+                if grand_parent != None:
+                    for k in grand_parent.keys:
+                        if k == self.parent.keys[0]:
+                            idx_at_grand_parent_children = i+1
+                            break
+                    else:
+                        idx_at_grand_parent_children = 0
+
+                    if idx_at_grand_parent_children != 0:
+                        grand_left_sibling = grand_parent.children[idx_at_grand_parent_children-1]
+                        grand_left_sibling.children[-1] = right_sibling
+
+                
+
+                
+                idx_at_parent_key = idx_at_parent_children
+                parent_deleted_key = self.parent.keys[idx_at_parent_key]
+                self.parent.delete(parent_deleted_key, idx_at_parent_children)
+                #self.parent.delete(parent_deleted_key)
+                if len(self.keys) == 0:
+                    self.replace_key(deleted_key, right_sibling.keys[0])
+                #self.parent.keys.pop(0)
+                #self.parent.children.pop(0)
+
         elif is_first_deleted:
             #replace
             new_key = self.keys[deleted_index]
@@ -243,15 +417,7 @@ class LeafNode(Node):
         else:
             pass
 
-    def replace_key(self, deleted_key, new_key):
-        node = self.parent
-        while node != None:
-            for i, key in enumerate(node.keys):
-                if deleted_key == key:
-                    node.keys[i] = new_key
-                    return
-            else:
-                node = node.parent
+
 
     def insert(self, x, data):
         for i, k in enumerate(self.keys):
@@ -450,14 +616,27 @@ def insert_test_reverse(branch_factor, key_num):
 
 def insert_test(branch_factor, key_num):
     t = BPlusTree(branch_factor)
-
     for k in range(1, key_num+1):
         t.insert(k, Record(k))
         t.print()
         t.test()
 
-if __name__ == "__main__":
+def delete_test(branch_factor, key_num):
+    t = BPlusTree(branch_factor)
+    for k in range(1, key_num+1):
+        t.insert(k, Record(k))
+
+    for  k in range(1, key_num+1):
+        t.delete(k)
+        t.print()
+        t.test()
+
+def make_tree(num):
     t = BPlusTree(4)
-    for i in range(1, 12+1):
+    for i in range(1, num+1):
         t.insert(i,i); t.print()
-    #insert_test_reverse(4, 4)
+    return t
+
+if __name__ == "__main__":
+    t = make_tree(5)
+    delete_test(4, 10)
