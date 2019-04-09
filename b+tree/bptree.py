@@ -74,19 +74,7 @@ class InternalNode(Node):
         for c in self.children:
             c.test()
     
-    def delete(self, x, child_index):
-        print("Internal delete", x , child_index)
-        """
-        make exception!!!
-        """
-        for i, k in enumerate(self.keys):
-            if x == k:
-                deleted_index = i
-                break
-        else:
-            print("Error: delete(x) x does not exist")
-            return
-
+    def delete(self, deleted_key_idx, deleted_child_idx):
         # If root, 2<= m <= b. If not root, ceil(b/2) <= m <= b
         if self.parent == None:
             is_root = True
@@ -95,7 +83,6 @@ class InternalNode(Node):
             is_root = False
             min_children_num = math.ceil(self.branch_factor/2)
         
-
         if self.parent != None:
             # If its's not root, find index of node at the parent's children list
             for i, k in enumerate(self.parent.keys):
@@ -130,15 +117,12 @@ class InternalNode(Node):
                     is_right_enough = False
                 
         # Delete key and value at my keys and children list
-        deleted_key = self.keys.pop(deleted_index)
-        del self.children[child_index]
+        deleted_key = self.keys.pop(deleted_key_idx)
+        del self.children[deleted_child_idx]
 
 
         # if number of children cannot satisfy rule of b+-tree
         # after deletetion, borrow or mergre with left of right
-        """
-        Is this necessary????
-        """
         if is_root and len(self.children) < min_children_num:
             self.children[0].parent = None
             self.tree.root = self.children[0]
@@ -146,7 +130,6 @@ class InternalNode(Node):
         elif not is_root and len(self.children) < min_children_num:
             # Internal node orrow from left
             if not is_leftmost and is_left_enough:
-                print("internal borrow from left")
                 # Borrow key and child from left sibling
                 borrow_key = left_sibling.keys.pop()
                 borrow_children = left_sibling.children.pop()
@@ -159,11 +142,14 @@ class InternalNode(Node):
                 self.children.insert(0, borrow_children)
 
                 # Exchange key value with parent
-                self.keys[0], self.parent.keys[index_at_parent-1] = self.parent.keys[index_at_parent-1], self.keys[0]
+                my_replace_key = self.keys[0]
+                parent_replace_key = self.parent.keys[index_at_parent-1]
+
+                self.keys[0] = parent_replace_key
+                self.parent.keys[index_at_parent-1] = my_replace_key
             
             # Internal node borrow from rigt
             elif not is_rightmost and is_right_enough:
-                print("internal borrow from right")
                 # Borrow key and child from right sibling
                 borrow_key = right_sibling.keys.pop(0)
                 borrow_children = right_sibling.children.pop(0)
@@ -176,15 +162,18 @@ class InternalNode(Node):
                 self.children.append(borrow_children)
 
                 # Exchange key value with parent
-                self.keys[-1], self.parent.keys[index_at_parent] = self.parent.keys[index_at_parent], self.keys[-1]
+                my_replace_key = self.keys[-1]
+                parent_replace_key = self.parent.keys[index_at_parent]
+
+                self.keys[-1] = parent_replace_key
+                self.parent.keys[index_at_parent] = my_replace_key
 
             # Internal node merge with left
             elif not is_leftmost:
-                print("Ineternal merge with left")
                 # Delete key and child at parent node
-                idx_at_parent_key = index_at_parent - 1
-                parent_deleted_key = self.parent.keys[idx_at_parent_key]
-                self.parent.delete(parent_deleted_key, index_at_parent)
+                deleted_key_idx = index_at_parent - 1
+                parent_deleted_key = self.parent.keys[deleted_key_idx]
+                self.parent.delete(deleted_key_idx, index_at_parent)
                 
                 # Change parent of my children to left sibling
                 for c in self.children:
@@ -197,12 +186,11 @@ class InternalNode(Node):
             
             # When internal node is leftmost, merger with right
             else:
-                print("internal merge with right")  
                 # Delete key and child at parent node
-                idx_at_parent_key = index_at_parent
-                parent_deleted_key = self.parent.keys[idx_at_parent_key]
-                #self.parent.delete(parent_deleted_key, index_at_parent)
-                self.parent.delete(parent_deleted_key, 0)
+                deleted_key_idx = index_at_parent
+                parent_deleted_key = self.parent.keys[deleted_key_idx]
+
+                self.parent.delete(deleted_key_idx, 0)
             
                 # Change parent of my children to right sibling
                 for c in self.children:
@@ -311,7 +299,6 @@ class LeafNode(Node):
             assert(k1 < k2)
     
     def delete(self, x):
-        print("Leafl delete", x)
         """
         exception???
         """
@@ -385,7 +372,6 @@ class LeafNode(Node):
         if len(self.children) < min_children_num:
             # Leaf node borrow from left
             if not is_leftmost and is_left_enough:
-                print("Leaf borrow from left")
                 # Borrow key and child from left sibling
                 borrow_key = left_sibling.keys.pop()
                 borrow_children = left_sibling.children.pop(-2)
@@ -401,7 +387,6 @@ class LeafNode(Node):
 
             # Leaf node borrow from right
             elif not is_rightmost and is_right_enough:
-                print("Leaf borrow from right")
                 # Borrow key and child from right sibling
                 borrow_key = right_sibling.keys.pop(0)
                 borrow_children = right_sibling.children.pop(0)
@@ -419,21 +404,18 @@ class LeafNode(Node):
 
             # Leaf node merge with left
             elif not is_leftmost:
-                print("Leaf merge with left")
                 # Merge with left sibling and concatenate between leaves
                 left_sibling.keys.extend(self.keys)
                 left_sibling.children[-1:] = self.children
 
                 # Delete key and child at parent node
-                idx_at_parent_key = index_at_parent-1
-                parent_deleted_key = self.parent.keys[idx_at_parent_key]
-                self.parent.delete(parent_deleted_key, index_at_parent)
+                deleted_key_idx = index_at_parent-1
+                self.parent.delete(deleted_key_idx, index_at_parent)
                 
                 return
 
             # When internal node is leftmost, merger with right
             else:
-                print("Leaf merge with right")
                 # Merge with right sibling
                 right_sibling.keys[:0] = self.keys
                 right_sibling.children[:0] = self.children[:-1]
@@ -442,10 +424,8 @@ class LeafNode(Node):
                 self.concatenate_left_cousin()
                 
                 # Delete key and child at parent node
-                idx_at_parent_key = index_at_parent
-                parent_deleted_key = self.parent.keys[idx_at_parent_key]
-                #self.parent.delete(parent_deleted_key, index_at_parent)
-                self.parent.delete(parent_deleted_key, 0)
+                deleted_key_idx = index_at_parent
+                self.parent.delete(deleted_key_idx, 0)
               
                 # If first value of key at leaf changed, internal must be changed too 
                 if len(self.keys) == 0:
@@ -475,11 +455,9 @@ class LeafNode(Node):
                 left_uncle.children[-1] = self.right_sibling
 
     def replace_key(self, deleted_key, new_key):
-        print("leaf replace key deleted_key", deleted_key, "new_key", new_key)
         node = self.parent
         while node != None:
             for i, key in enumerate(node.keys):
-                print(deleted_key, key)
                 if deleted_key == key:
                     node.keys[i] = new_key
                     return
