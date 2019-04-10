@@ -1,6 +1,18 @@
 import math
 import random
 
+class NoKeyExistError(Exception):
+    def __init__(self, key):
+        self.key = key
+    def __str__(self):
+        return "{} does not exist".foramt(self.key)
+
+class DuplicateKeyExistError(Exception):
+    def __init__(self, key):
+        self.key = key
+    def __str__(self):
+        return "{} already exists".foramt(self.key)
+
 class BPlusTree():
     def __init__(self, branch_factor):
         self.branch_factor = branch_factor
@@ -23,11 +35,14 @@ class BPlusTree():
         leaf.insert(x, data)
     
     def search(self, x):
-        print("Search: ", X)
-        return self.root.search(x)
+        print("Search:", x)
+        leaf = self.root.leaf_search(x)
+        return leaf.search(x)
 
     def ranged_search(self, x, y):
-        return self.root.ranged_search(x, y)
+        print("Ranged Search: [{}, {}]".format(x, y))
+        leaf = self.root.leaf_search(x)
+        return leaf.ranged_search(x, y)
 
 class Node():
     def __init__(self, tree, branch_factor):
@@ -39,7 +54,19 @@ class Node():
         self.children = [None]
     
     def __str__(self):
-        return hex(id(self))[-4:] 
+        return hex(id(self))[-4:]
+
+    def leaf_search(self, x):
+        node = self
+        while not isinstance(node, LeafNode):
+            for i, k in enumerate(node.keys):
+                if x < k:
+                    node =  node.children[i]
+                    break
+            else:
+                node = node.children[-1]
+        return node
+
 
 class InternalNode(Node):
     def print(self, depth):
@@ -53,7 +80,7 @@ class InternalNode(Node):
     def test(self):
         m = len(self.children)
 
-        # number of keys and children test
+        # Number of keys and children test
         assert(len(self.keys) == m-1)
         assert(m <= self.branch_factor)
         if self.parent == None:
@@ -61,7 +88,7 @@ class InternalNode(Node):
         else:
             assert(math.ceil(self.branch_factor/2) <= m)
 
-        # value of key test
+        # Value of key test
         for k in  self.children[0].keys:
             assert(k < self.keys[0])
         for i in range(len(self.keys)-1):
@@ -202,80 +229,49 @@ class InternalNode(Node):
                 right_sibling.children[:0] = self.children[:]
     
     def insert(self, x, child):
+        # FInd appropriate index and insert key and data
         for i, k in enumerate(self.keys):
-            if x == k:
-                print("Error: insert(x) x already exists")
-                return
-            elif x < k:
+            if x < k:
                 self.keys.insert(i, x)
                 if child.keys[0] >= x:
                     self.children.insert(i+1, child)
                 else:
                     self.children.insert(i, chlid)
                 break
-                """
-                if i == 0:
-                    self.children.insert(1, child)
-                else:
-                    self.children.insert(i, child)
-                break
-                """
         else:
             self.keys.append(x)
             self.children.append(child)
         
-        # split test
+        # If number of children is bigger than branch factor, split the node
         if len(self.children) > self.branch_factor:
-            new_node = InternalNode(self.tree, self.branch_factor)
-            new_node.parent = self.parent
-            new_node.keys = self.keys[self.branch_factor//2 + 1:]
-            del self.keys[self.branch_factor//2 + 1:]
-            up_key = self.keys.pop()
+            # Create new node and insert half of keys and children
+            new_sibling = InternalNode(self.tree, self.branch_factor)
+            new_sibling.parent = self.parent
+            new_sibling.keys = self.keys[self.branch_factor//2+1:]
+            new_sibling.children = self.children[self.branch_factor//2+1:]
 
-            new_node.children = self.children[self.branch_factor//2+1:]
+            # Delete relocated keys and children from node
+            # If root does not exist and, middle key may 
+            del self.keys[self.branch_factor//2+1:]
+            middle_key = self.keys.pop()
             del self.children[self.branch_factor//2+1:]
-            for c in new_node.children:
-                c.parent = new_node
 
-            if self.parent == None:
-                p = InternalNode(self.tree, self.branch_factor)
-                p.keys = [up_key]
-                p.children = [self, new_node]
+            # Redesignate parent of new node's children
+            for c in new_sibling.children:
+                c.parent = new_sibling
 
-                self.parent = p
-                self.tree.root = p
-                new_node.parent = p
-        
+            # Insert middle key to the parent
+            # If parent does not exist, make internal node
+            if self.parent != None:
+                self.parent.insert(middle_key, new_sibling)
             else:
-                self.parent.insert(up_key, new_node)
+                new_parent = InternalNode(self.tree, self.branch_factor)
+                new_parent.keys = [middle_key]
+                new_parent.children = [self, new_sibling]
 
-        
-    def leaf_search(self, x):
-        for i, k in enumerate(self.keys):
-            if x < k:
-                result_index = i
-                break
-        else:
-            result_index = -1
-        return self.children[result_index].leaf_search(x)
-        """
-        if isinstance(self.children[0], LeafNode):
-            return self.children[result_index]
-        else:
-            return self.children[result_index].leaf_search(x)
-        """
-    def search(self, x):
-        for i, k in enumerate(self.keys):
-            if x < k:
-                return self.children[i].search(x)
-        return self.children[-1].search(x)
-    
-    def ranged_search(self, x, y):
-        for i, k in enumerate(self.keys):
-            if x < k:
-                return self.children[i].ranged_search(x, y)
-        return self.children[-1].search(x, y)
-
+                self.parent = new_parent
+                new_sibling.parent = new_parent
+                self.tree.root = new_parent
 
 class LeafNode(Node):
     def print(self, depth):
@@ -285,7 +281,8 @@ class LeafNode(Node):
 
     def test(self):
         m = len(self.children)
-        # number of keys and children test
+
+        # Number of keys and children test
         assert(len(self.keys) == m-1)
         assert(m <= self.branch_factor)
         if self.parent == None:
@@ -293,22 +290,18 @@ class LeafNode(Node):
         else:
             assert(math.ceil(self.branch_factor/2) <= m)
         
-        # value of key test
+        # Value of key test
         for i in range(len(self.keys)-1):
             k1, k2 = self.keys[i], self.keys[i+1]
             assert(k1 < k2)
     
     def delete(self, x):
-        """
-        exception???
-        """
         for i, k in enumerate(self.keys):
             if x == k:
                 deleted_index = i
                 break
         else:
-            print("Error: delete(x) x does not exist")
-            return
+            raise NoKeyExistError(x)
     
         # Check whether deleted key is located at first of my key list
         if deleted_index == 0:
@@ -464,12 +457,11 @@ class LeafNode(Node):
             else:
                 node = node.parent
     
-
     def insert(self, x, data):
+        # FInd appropriate index and insert key and data
         for i, k in enumerate(self.keys):
             if x == k:
-                print("Error: insert(x) x already exists")
-                return
+                raise DuplicateKeyExistError(x)
             elif x < k:
                 self.keys.insert(i, x)
                 self.children.insert(i, data)
@@ -478,32 +470,32 @@ class LeafNode(Node):
             self.keys.append(x)
             self.children.insert(-1, data)
 
-        # split test
+        # If number of children is bigger than branch factor, split the node
         if len(self.children) > self.branch_factor:
-            new_leaf = LeafNode(self.tree, self.branch_factor)
-            new_leaf.parent = self.parent
-            new_leaf.keys = self.keys[self.branch_factor//2:]
+            # Create new node and insert half of keys and children
+            new_sibling = LeafNode(self.tree, self.branch_factor)
+            new_sibling.parent = self.parent
+            new_sibling.keys = self.keys[self.branch_factor//2:]
+            new_sibling.children = self.children[self.branch_factor//2:]
+            
+            # Delete relocated keys and children from node
             del self.keys[self.branch_factor//2:]
-
-            new_leaf.children = self.children[self.branch_factor//2:]
             del self.children[self.branch_factor//2:]
-            self.children.append(new_leaf)
+            self.children.append(new_sibling)
 
-            if self.parent == None:
-                p = InternalNode(self.tree, self.branch_factor)
-                p.keys = [new_leaf.keys[0]]
-                p.children = [self, new_leaf]
-
-                self.parent = p
-                self.tree.root = p
-                new_leaf.parent = p
-        
+            # Insert first key of new node to the parent
+            # If parent does not exist, create internal node
+            if self.parent != None:
+                self.parent.insert(new_sibling.keys[0], new_sibling)
             else:
-                self.parent.insert(new_leaf.keys[0], new_leaf)
+                new_parent = InternalNode(self.tree, self.branch_factor)
+                new_parent.keys = [new_sibling.keys[0]]
+                new_parent.children = [self, new_sibling]
 
-    def leaf_search(self, x):
-        return self
-
+                self.parent = new_parent
+                new_sibling.parent = new_parent
+                self.tree.root = new_parent
+    
     def search(self, x):
         for i, k in enumerate(self.keys):
             if x == k:
@@ -514,26 +506,30 @@ class LeafNode(Node):
         result = []
 
         start_index, end_index = 0, len(self.keys) - 1
-        start_found, end_found = False, False
+        is_start_found, is_end_found = False, False
         node = self
-        while node != None and not end_found:
+
+        # Travrse leaves to find datas meet condition
+        while node != None and not is_end_found:
             for i, k in enumerate(node.keys):
-                if start_found:
+                # Find start index to copy
+                if is_start_found:
                     start_index = 0
                 elif x <= k:
-                    start_found = True
+                    is_start_found = True
                     start_index = i
-                else:
-                    pass
 
-                if not end_found and y < k:
-                    end_found = True
+                # Find end index to copy
+                if not is_end_found and y < k:
+                    is_end_found = True
                     end_index = i-1
 
-            if end_index != -1:
+            # Copy datas to the result and move to the next node
+            if not is_start_found:
+                node = node.children[-1]
+            elif end_index != -1:
                 result += node.children[start_index: end_index+1]
                 node = node.children[-1]
-
 
         return result
 
@@ -647,7 +643,7 @@ def insert_test_right(branch_factor, key_num):
         t.test()
 
 def insert_test_reverse(branch_factor, key_num):
-    print("Insert test reverse: branch_factor {} key_num {}".format(branch_factor, key_numa))
+    print("Insert test reverse: branch_factor {} key_num {}".format(branch_factor, key_num))
     t = BPlusTree(branch_factor)
     key_list = list(range(1, key_num+1))
     key_list.reverse()
@@ -667,9 +663,9 @@ def insert_test_random(branch_factor, key_num):
         t.test()
 
 def insert_test(branch_factor, key_num):
-    insert_test_right(branch_facotr, key_num)
-    insert_test_reverse(branch_facotr, key_num)
-    insert_test_random(branch_facotr, key_num)
+    insert_test_right(branch_factor, key_num)
+    insert_test_reverse(branch_factor, key_num)
+    insert_test_random(branch_factor, key_num)
 
 def delete_test_right(branch_factor, key_num):
     print("Delete test right: branch_factor {} key_num {}".format(branch_factor, key_num))
