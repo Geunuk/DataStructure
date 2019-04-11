@@ -77,30 +77,6 @@ class InternalNode(Node):
         for c in self.children:
             c.print(depth+1)
     
-    def test(self):
-        m = len(self.children)
-
-        # Number of keys and children test
-        assert(len(self.keys) == m-1)
-        assert(m <= self.branch_factor)
-        if self.parent == None:
-            assert(2 <= m)
-        else:
-            assert(math.ceil(self.branch_factor/2) <= m)
-
-        # Value of key test
-        for k in  self.children[0].keys:
-            assert(k < self.keys[0])
-        for i in range(len(self.keys)-1):
-            k1, k2 = self.keys[i], self.keys[i+1]
-            for x in self.children[i+1].keys:
-                assert(k1 <= x and x < k2)
-        for k in self.children[-1].keys:
-            assert(self.keys[-1] <= k)
-       
-        for c in self.children:
-            c.test()
-    
     def delete(self, deleted_key_idx, deleted_child_idx):
         # If root, 2<= m <= b. If not root, ceil(b/2) <= m <= b
         if self.parent == None:
@@ -279,22 +255,6 @@ class LeafNode(Node):
         print("Depth: {} [{}]".format(depth, str(self)), end='\t')
         print("Keys:", self.keys, "Children:", children_ids)
 
-    def test(self):
-        m = len(self.children)
-
-        # Number of keys and children test
-        assert(len(self.keys) == m-1)
-        assert(m <= self.branch_factor)
-        if self.parent == None:
-            assert(1 <= m)
-        else:
-            assert(math.ceil(self.branch_factor/2) <= m)
-        
-        # Value of key test
-        for i in range(len(self.keys)-1):
-            k1, k2 = self.keys[i], self.keys[i+1]
-            assert(k1 < k2)
-    
     def delete(self, x):
         for i, k in enumerate(self.keys):
             if x == k:
@@ -499,7 +459,7 @@ class LeafNode(Node):
     def search(self, x):
         for i, k in enumerate(self.keys):
             if x == k:
-                return self.children[i]
+                return (x, self.children[i])
         return None
     
     def ranged_search(self, x, y):
@@ -528,7 +488,9 @@ class LeafNode(Node):
             if not is_start_found:
                 node = node.children[-1]
             elif end_index != -1:
-                result += node.children[start_index: end_index+1]
+                key_result = node.keys[start_index: end_index+1]
+                children_result = node.children[start_index: end_index+1]
+                result += list(zip(key_result, children_result))
                 node = node.children[-1]
 
         return result
@@ -539,182 +501,3 @@ class Record():
 
     def __str__(self):
         return "Record: " + str(self.data)
-
-def example1():
-    t = BPlusTree(4)
-
-    seven = InternalNode(4)
-    threefive = InternalNode(4)
-    nine = InternalNode(4)
-
-    onetwo = LeafNode(4)
-    threefour = LeafNode(4)
-    fivesix = LeafNode(4)
-    seveneight = LeafNode(4)
-    nineten = LeafNode(4)
-
-    r1 = Record(1)
-    r2 = Record(2)
-    r3 = Record(3)
-    r4 = Record(4)
-    r5 = Record(5)
-    r6 = Record(6)
-    r7 = Record(7)
-    r8 = Record(8)
-    r9 = Record(9)
-    r10 = Record(10)
-
-    t.root = seven
-
-    seven.keys.append(7)
-    seven.children.append(threefive)
-    seven.children.append(nine)
-
-    threefive.keys.append(3)
-    threefive.keys.append(5)
-    threefive.children.append(onetwo)
-    threefive.children.append(threefour)
-    threefive.children.append(fivesix)
-
-    nine.keys.append(9)
-    nine.children.append(seveneight)
-    nine.children.append(nineten)
-
-    onetwo.keys.append(1)
-    onetwo.keys.append(2)
-    onetwo.children.append(r1)
-    onetwo.children.append(r2)
-    onetwo.children.append(threefour)
-
-    threefour.keys.append(3)
-    threefour.keys.append(4)
-    threefour.children.append(r3)
-    threefour.children.append(r4)
-    threefour.children.append(fivesix)
-
-    fivesix.keys.append(5)
-    fivesix.keys.append(6)
-    fivesix.children.append(r5)
-    fivesix.children.append(r6)
-    fivesix.children.append(seveneight)
-
-    seveneight.keys.append(7)
-    seveneight.keys.append(8)
-    seveneight.children.append(r7)
-    seveneight.children.append(r8)
-    seveneight.children.append(nineten)
-
-    nineten.keys.append(9)
-    nineten.keys.append(10)
-    nineten.children.append(r9)
-    nineten.children.append(r10)
-    nineten.children.append(None)
-
-    seven.name = "Node: seven"
-    threefive.name = "Node: threefive"
-    nine.name = "Node: nine"
-    onetwo.name = "Node: onetwo"
-    threefour.name = "Node: threefour"
-    fivesix.name = "Node: fivesix"
-    seveneight.name = "Node: seveneight"
-    nineten.name = "Node: nineten"
-
-    return t
-
-def search_test():
-    t = example1()
-    for i in range(1, 11):
-        print(t.search(i))
-        print()
-
-def ranged_search_test():
-    t = example1()
-    for i in range(2, 11):
-        result = t.ranged_search(1, i)
-        for x in result:
-            print(x, end=', ')
-        print()
-
-def insert_test_right(branch_factor, key_num):
-    print("Insert test right: branch_factor {} key_num {}".format(branch_factor, key_num))
-    t = BPlusTree(branch_factor)
-    for k in range(1, key_num+1):
-        t.insert(k, Record(k))
-        t.test()
-
-def insert_test_reverse(branch_factor, key_num):
-    print("Insert test reverse: branch_factor {} key_num {}".format(branch_factor, key_num))
-    t = BPlusTree(branch_factor)
-    key_list = list(range(1, key_num+1))
-    key_list.reverse()
-
-    for k in key_list:
-        t.insert(k, Record(k))
-        t.test()
-
-def insert_test_random(branch_factor, key_num):
-    print("Insert test random: branch_factor {} key_num {}".format(branch_factor, key_num))
-    t = BPlusTree(branch_factor)
-    key_list = list(range(1, key_num+1))
-    random.shuffle(key_list)
-
-    for k in key_list:
-        t.insert(k, Record(k))
-        t.test()
-
-def insert_test(branch_factor, key_num):
-    insert_test_right(branch_factor, key_num)
-    insert_test_reverse(branch_factor, key_num)
-    insert_test_random(branch_factor, key_num)
-
-def delete_test_right(branch_factor, key_num):
-    print("Delete test right: branch_factor {} key_num {}".format(branch_factor, key_num))
-    t = BPlusTree(branch_factor)
-    for k in range(1, key_num+1):
-        t.insert(k, Record(k))
-
-    for  k in range(1, key_num+1):
-        t.delete(k)
-        t.test()
-
-def delete_test_reverse(branch_factor, key_num):
-    print("Delete test reverse: branch_factor {} key_num {}".format(branch_factor, key_num))
-    t = BPlusTree(branch_factor)
-    key_list = list(range(1, key_num+1))
-
-    for k in key_list:
-        t.insert(k, Record(k))
-
-    key_list.reverse()
-    for  k in key_list:
-        t.delete(k)
-        t.test()
-
-def delete_test_random(branch_factor, key_num):
-    print("Delete test random: branch_factor {} key_num {}".format(branch_factor, key_num))
-    t = BPlusTree(branch_factor)
-    key_list = list(range(1, key_num+1))
-    for k in key_list:
-        t.insert(k, Record(k))
-    
-
-    random.shuffle(key_list)
-    #key_list = [3,30,18,28,12,19,6,11,25,17,5,16,13,29,10,15,21,20,26,27]
-    for  k in key_list:
-        t.delete(k)
-
-        t.test()
-    t.print()
-def delete_test(branch_factor, key_num):
-    delete_test_right(branch_factor, key_num)
-    delete_test_reverse(branch_factor, key_num)
-    delete_test_random(branch_factor, key_num)
-
-def make_tree(num):
-    t = BPlusTree(4)
-    for i in range(1, num+1):
-        t.insert(i,i); t.print()
-    return t
-
-if __name__ == "__main__":
-    ...
