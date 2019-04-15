@@ -15,15 +15,16 @@ class DuplicateKeyExistError(Exception):
         return "{} already exists".foramt(self.key)
 
 class BPlusTree():
-    def __init__(self, branch_factor):
+    def __init__(self, branch_factor, duplicate=False):
         self.branch_factor = branch_factor
         self.root = LeafNode(self, self.branch_factor)
+        self.duplicate = duplicate
     
     def view(self):
-        self.g = Digraph(format='png', name="b+-tree",
+        g = Digraph(format='png', name="b+-tree",
                 graph_attr={'splines':'false'}, node_attr={'shape':'plaintext'})
 
-        self.subgraph_list = [self.g]
+        self.subgraph_list = [g]
         self.node_index = 0
         self.leaf_index = 0
         self.last_child_index = 0
@@ -33,9 +34,9 @@ class BPlusTree():
         self.draw_graph(self.root, None, None, 0)
 
         for l in self.subgraph_list[1:]:
-            self.g.subgraph(l)
+            g.subgraph(l)
 
-        self.g.view()
+        g.view()
 
     def make_label(self, node):
         result_str = '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">'
@@ -54,6 +55,8 @@ class BPlusTree():
         return result_str
 
     def draw_graph(self, n, parent_name, index_at_parent, depth):
+        g = self.subgraph_list[0]
+
         # When max depth updated, create new subgraph
         # If not, find subgraph depending on depth
         max_depth = len(self.subgraph_list) - 1
@@ -63,7 +66,7 @@ class BPlusTree():
         else:
             s = self.subgraph_list[depth]
 
-        # When internal node
+        # When node is internal
         if isinstance(n, InternalNode):    
             # Create node
             self.node_index += 1
@@ -72,12 +75,12 @@ class BPlusTree():
 
             # When root if not leaf, create edge
             if parent_name != None:
-                self.g.edge("{}:f{}".format(parent_name, index_at_parent), node_name)
+                g.edge("{}:f{}:s".format(parent_name, index_at_parent), node_name)
 
             for child_index, c in enumerate(n.children):
                 self.draw_graph(c, node_name, child_index, depth+1)
 
-        # When leaf node
+        # When node is leaf
         else:
             # Creat node
             self.leaf_index += 1
@@ -86,7 +89,7 @@ class BPlusTree():
             
             # When root if not leaf, create edge
             if parent_name != None:
-                self.g.edge("{}:f{}".format(parent_name, index_at_parent), node_name)
+                g.edge("{}:f{}:s".format(parent_name, index_at_parent), node_name)
 
                 # Concatenate leaves
                 if self.leaf_index != 1 :
@@ -329,7 +332,11 @@ class InternalNode(Node):
 
 class LeafNode(Node):
     def print(self, depth):
-        children_ids = [str(c) for c in self.children]
+        if self.tree.duplicate:
+            children_ids = [[str(x) for x in c] for c in self.children[:-1]]
+            children_ids.append(str(self.children[-1]))
+        else:
+            children_ids = [str(c) for c in self.children]
         print("Depth: {} [{}]".format(depth, str(self)), end='\t')
         print("Keys:", self.keys, "Children:", children_ids)
 
@@ -497,16 +504,29 @@ class LeafNode(Node):
     
     def insert(self, x, data):
         # FInd appropriate index and insert key and data
-        for i, k in enumerate(self.keys):
-            if x == k:
-                raise DuplicateKeyExistError(x)
-            elif x < k:
-                self.keys.insert(i, x)
-                self.children.insert(i, data)
-                break
+        if self.tree.duplicate:
+            for i, k in enumerate(self.keys):
+                if x == k:
+                    self.children[i].append(data)
+                    break
+                elif x < k:
+                    self.keys.insert(i, x)
+                    self.children.insert(i, [data])
+                    break
+            else:
+                self.keys.append(x)
+                self.children.insert(-1, [data])
         else:
-            self.keys.append(x)
-            self.children.insert(-1, data)
+            for i, k in enumerate(self.keys):
+                if x == k:
+                    raise DuplicateKeyExistError(x)
+                elif x < k:
+                    self.keys.insert(i, x)
+                    self.children.insert(i, data)
+                    break
+            else:
+                self.keys.append(x)
+                self.children.insert(-1, data)
 
         # If number of children is bigger than branch factor, split the node
         if len(self.children) > self.branch_factor:
@@ -581,7 +601,7 @@ class Record():
         return "Record: " + str(self.data)
 
 if __name__ == "__main__":
-    t = BPlusTree(4)
-    for i in range(1, 30+1):
+    t = BPlusTree(4, duplicate=True)
+    for i in range(1, 12+1):
         t.insert(i, Record(i))
 
