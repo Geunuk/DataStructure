@@ -1,2 +1,3 @@
 insert
 __pycache__
+*.gv*

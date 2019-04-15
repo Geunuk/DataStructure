@@ -1,5 +1,6 @@
 import math
-import random
+
+from graphviz import *
 
 class NoKeyExistError(Exception):
     def __init__(self, key):
@@ -17,7 +18,84 @@ class BPlusTree():
     def __init__(self, branch_factor):
         self.branch_factor = branch_factor
         self.root = LeafNode(self, self.branch_factor)
-      
+    
+    def view(self):
+        self.g = Digraph(format='png', name="b+-tree",
+                graph_attr={'splines':'false'}, node_attr={'shape':'plaintext'})
+
+        self.subgraph_list = [self.g]
+        self.node_index = 0
+        self.leaf_index = 0
+        self.last_child_index = 0
+
+        self.node_index += 1
+        node_name = "node".format(self.node_index)
+        self.draw_graph(self.root, None, None, 0)
+
+        for l in self.subgraph_list[1:]:
+            self.g.subgraph(l)
+
+        self.g.view()
+
+    def make_label(self, node):
+        result_str = '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="4">'
+        result_str += "<TR>"
+
+        for i in range(node.branch_factor-1):
+            result_str += '<TD ROWSPAN="1" PORT="f{}"></TD> '.format(i)
+            if i <= len(node.keys)-1:
+                result_str +='<TD>{}</TD>'.format(node.keys[i])
+            else:
+                result_str += '<TD>  </TD>'
+
+        result_str += '<TD ROWSPAN="1" PORT="f{}"></TD> '.format(node.branch_factor-1)
+        result_str += '</TR>'
+        result_str += '</TABLE>>'
+        return result_str
+
+    def draw_graph(self, n, parent_name, index_at_parent, depth):
+        # When max depth updated, create new subgraph
+        # If not, find subgraph depending on depth
+        max_depth = len(self.subgraph_list) - 1
+        if max_depth < depth:
+            s = Digraph(graph_attr={'rank':'same'})
+            self.subgraph_list.append(s)
+        else:
+            s = self.subgraph_list[depth]
+
+        # When internal node
+        if isinstance(n, InternalNode):    
+            # Create node
+            self.node_index += 1
+            node_name = "node{}".format(self.node_index)
+            s.node(node_name, self.make_label(n))
+
+            # When root if not leaf, create edge
+            if parent_name != None:
+                self.g.edge("{}:f{}".format(parent_name, index_at_parent), node_name)
+
+            for child_index, c in enumerate(n.children):
+                self.draw_graph(c, node_name, child_index, depth+1)
+
+        # When leaf node
+        else:
+            # Creat node
+            self.leaf_index += 1
+            node_name = 'leaf{}'.format(self.leaf_index)
+            s.node(node_name, self.make_label(n))
+            
+            # When root if not leaf, create edge
+            if parent_name != None:
+                self.g.edge("{}:f{}".format(parent_name, index_at_parent), node_name)
+
+                # Concatenate leaves
+                if self.leaf_index != 1 :
+                    prev_leaf = "leaf{}:f{}:s".format(self.leaf_index-1, self.last_child_index)
+                    self.subgraph_list[depth].edge(prev_leaf, node_name)
+
+                # Update last index of children list of leaf    
+                self.last_child_index = len(n.children) - 1
+
     def print(self):
         self.root.print(0)
 
@@ -501,3 +579,9 @@ class Record():
 
     def __str__(self):
         return "Record: " + str(self.data)
+
+if __name__ == "__main__":
+    t = BPlusTree(4)
+    for i in range(1, 30+1):
+        t.insert(i, Record(i))
+
